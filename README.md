@@ -37,14 +37,14 @@ We built a baseline model using:
 - Constructed a synthetic Connecticut using weighted averages of control states
 - Compared actual crime rate trajectory with synthetic control
 
-#### 🔍 Findings from SCM:
+#### Findings 
 - Pre-treatment fit: Close match between actual and synthetic trends
 - Post-treatment: Clear divergence from 2013 onwards
 - **ATE** (Average Treatment Effect): ~−49.3 units decrease in crime rate
 - Placebo tests confirmed the effect was not observed in other states
 
-<p align="center">
-  <img src="figures/path_gap_plot.png" width="600" alt="Path and Gap Plot">
+<p align="left">
+  <img src="Placebo Test Gap Plot.png" width="600" alt="Path and Gap Plot">
 </p>
 
 ## Key Results
