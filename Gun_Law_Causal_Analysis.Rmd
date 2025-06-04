@@ -7,7 +7,7 @@ date: "2025-03-01"
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 rm(list=ls())
-library('readxl')
+library('readr')
 library('ggplot2')
 library('plm')
 library('Synth')
@@ -17,8 +17,8 @@ library('tidyverse')
 # Load the crime rate and covariates data and check the data structure.
 
 ```{r cars}
-file_path <- "/Users/zhuzhu/Downloads/final data econ.xlsx"
-crimerate <- read_excel(file_path, sheet = "Gun law")
+file_path <- "final data.csv"
+crimerate <- read_csv(file_path)
 head(crimerate)
 str(crimerate)
 summary(crimerate)
