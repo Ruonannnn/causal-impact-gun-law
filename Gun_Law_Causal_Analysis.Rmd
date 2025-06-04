@@ -1,0 +1,454 @@
+---
+title: "Gun Law Causal Analysis"
+output: html_document
+date: "2025-03-01"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+library('readxl')
+library('ggplot2')
+library('plm')
+library('Synth')
+library('tidyverse')
+```
+
+# Load the crime rate and covariates data and check the data structure.
+
+```{r cars}
+file_path <- "/Users/zhuzhu/Downloads/final data econ.xlsx"
+crimerate <- read_excel(file_path, sheet = "Gun law")
+head(crimerate)
+str(crimerate)
+summary(crimerate)
+```
+#We can see the incidents column and Unemployment rate column have numerical values, but their datatype are character. We need to convert the datatype.
+
+```{r pressure, echo=FALSE}
+crimerate$Incident <- as.numeric(crimerate$Incident)
+crimerate$`Unemployment rate` <- as.numeric(crimerate$`Unemployment rate`)
+str(crimerate)
+summary(crimerate)
+```
+#Based on our motivation and intuition, we only keep those columns that are related to our analysis crime rate and drop those rows with NULL value in crime rate. 
+
+```{r}
+#Extract the useful columns
+crimerate_selected <- crimerate %>%
+  select(state, year, Population, `Crime rate`, `Unemployment rate`, `Median Household income`, ammpermit)
+
+#Drop the null values
+crimerate_selected <- crimerate_selected %>%
+  filter(!is.na(`Crime rate`))
+
+#Check the results
+summary(crimerate_selected)
+```
+#Since we want to analyze the impact of the gun permit law in Connecticut in 2013 on crime rate, we need to check whether the crime rate indeed changed (decreased) in 2013.
+
+```{r}
+#Extract the Connecticut data
+ct_data <- crimerate_selected[crimerate_selected$state == "Connecticut", ]
+
+#Draw the yearly crime rate change plot in Connecticut.
+ggplot(ct_data, aes(x = year, y = `Crime rate`)) +
+  geom_line(color = "red", size = 1) +
+  geom_point(color = "red") +
+  geom_vline(xintercept = 2013, linetype = "dashed", color = "blue") +
+  labs(title = "Crime Rate in Connecticut (2005-2017)",
+       x = "Year", y = "Crime Rate per 100,000 people") +
+  theme_minimal()
+```
+# We find the crime rate indeed ovbiously droped in 2013, but we want to figure out whether the crime rate in all states droped in 2013.
+
+```{r}
+ggplot(crimerate_selected, aes(x = year, y = `Crime rate`, group = state)) +
+  geom_line(alpha = 0.3) +  
+  geom_line(data = subset(crimerate_selected, state == "Connecticut"), 
+            aes(x = year, y = `Crime rate`), color = "red", size = 1) +
+  geom_vline(xintercept = 2013, linetype = "dashed", color = "blue") + 
+  labs(title = "Crime Rate Trends: Connecticut vs. Other States", 
+       x = "Year", y = "Crime Rate per 100,000 people") +
+  theme_minimal()
+```
+#Different magnitude of crime rate seems incomparable, we we just keep states with a reasonable and comparable range of crime rate.
+
+```{r}
+#Keep the reasonable range
+clean_data <- crimerate_selected %>% filter(`Crime rate` < 350) %>% filter(`Crime rate` > 150)  
+
+#Draw the yearly crime rate changes by different states
+ggplot(clean_data, aes(x = year, y = `Crime rate`, group = state)) +
+  geom_line(alpha = 0.3) +
+  geom_line(data = subset(clean_data, state == "Connecticut"), 
+            aes(x = year, y = `Crime rate`), color = "red", size = 1) +
+  geom_vline(xintercept = 2013, linetype = "dashed", color = "blue") + 
+  labs(title = "Crime Rate Trends (Filtered)", 
+       x = "Year", y = "Crime Rate per 100,000 people") +
+  theme_minimal()
+```
+
+#There seems no other obvious drop at 2013 (Connecticut is the only state with the gun permit requirement law in that time).
+#We can also check the range of crime rate to find whether there is outliers or not.
+
+```{r}
+ggplot(crimerate_selected, aes(x = "", y = `Crime rate`)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Crime Rate", y = "Crime Rate") +
+  theme_minimal()
+```
+There is no extreme outliers. 
+
+#We find some covariates also can impact state crime rate, if we don't investigate them well, we may misinterpret the impact of the law on crime rate.
+
+#We can roughly check the relationship between household income and crime rate.
+
+```{r}
+
+ggplot(crimerate_selected, aes(x = `Median Household income`, y = `Crime rate`)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  theme_minimal() +
+  labs(title = "Crime Rate vs. Median Household Income",
+       x = "Median Household Income", y = "Crime Rate")
+
+cor_income <-cor(crimerate_selected$`Crime rate`, crimerate_selected$`Median Household income`, use = "complete.obs")
+cor_income 
+```
+We get the correlation between household income and crime rate, this is intuitive since the higher household income is, people have stable work, they don't worry about life, the crime rate will decrease.
+
+#We can roughly check the relationship between population and crime rate.
+
+```{r}
+ggplot(crimerate_selected, aes(x = Population, y = `Crime rate`)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  theme_minimal() +
+  labs(title = "Crime Rate vs. Population",
+       x = "Population", y = "Crime Rate")
+cor_popu <-cor(crimerate_selected$`Crime rate`, crimerate_selected$Population, use = "complete.obs")
+cor_popu 
+```
+We get the correlation between Population and crime rate, this is intuitive since the more people in the states, meaning the states is prosperous,the crime rate will increase.
+
+#We can roughly check the relationship between unemployment rate and crime rate.
+
+```{r}
+ggplot(crimerate_selected, aes(x = `Unemployment rate`, y = `Crime rate`)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  theme_minimal() +
+  labs(title = "Crime Rate vs. Unemployment rate",
+       x = "Unemployment Rate", y = "Crime Rate")
+
+cor_unempolyment <-cor(crimerate_selected$`Crime rate`, crimerate_selected$`Unemployment rate`, use = "complete.obs")
+cor_unempolyment
+```
+
+We get the correlation between unemployment rate and crime rate, this is intuitive since the higher the unemployment rate is, meaning a lot of people don't have stable job, the society is turbulent, the crime rate will increase.
+
+#We can also check the distribution of the crime rate.
+
+```{r}
+ggplot(crimerate_selected, aes(sample = `Crime rate`)) +
+  stat_qq() +
+  stat_qq_line() +
+  theme_minimal() +
+  labs(title = "QQ Plot of Crime Rate")
+```
+#The crime rate is roughly evenly distributed in different level, but there is some extreme outliers existing. 
+
+#We can first run a simle linear regression with the three important covariates in our model to show the general impact of the law.
+
+```{r}
+# OLS Model
+ols_model <- lm(crimerate_selected$`Crime rate` ~ factor(ammpermit) + `Median Household income` + `Unemployment rate`  + Population, data = crimerate_selected)
+summary(ols_model)
+
+# Histogram of residuals
+ggplot(data = data.frame(residuals = residuals(ols_model)), aes(x = residuals)) +
+  geom_histogram(bins = 30, fill = "blue", alpha = 0.7, color = "black") +
+  theme_minimal() +
+  labs(title = "Residual Distribution of OLS Model", x = "Residuals", y = "Count")
+```
+The result of our OLS model is not so good, and the residuals is huge. And even the sign of the treatment effect is not consistent with our intuition.
+
+# We then try OLS with interaction. Sometime the permit has different impact of different groups of people. So we add another interaction term in our model.
+
+```{r}
+# OLS Model with Interaction (Gun Permit * Unemployment)
+ols_model_interact <- lm(`Crime rate` ~ ammpermit + ammpermit * `Unemployment rate` + Population + `Median Household income`, data = crimerate_selected)
+
+# Summary
+summary(ols_model_interact)
+```
+
+#The result is still not good, since the crime rate varying with different state base and different year. So we try to 
+
+```{r}
+panel_model <- plm(crimerate_selected$`Crime rate` ~ ammpermit + crimerate_selected$`Median Household income` + crimerate_selected$`Unemployment rate` +Population,data = crimerate_selected, index = c("state", "year"), model = "within")
+summary(panel_model)
+```
+After controlling the time and unit fixed effect, we can get a more accurate treatment effect, but still not so good. The problem is we only have one treat unit, and all of others are control units. 
+
+#Actually, we want to figure out the impact of the gun permit law in Connecticut, we should only focus on Connecticut. But we don't know the potential outcome of Connecticut without the law after 2013. So we can mimic Connectincut with other states based on some important indicators. 
+
+# Find states with similar crime rate with Connecticut
+
+```{r}
+crime_rate_wide <- crimerate_selected %>%
+  filter(year < 2013) %>%
+  pivot_wider(id_cols = year, names_from = state, values_from = `Crime rate`)
+
+cor_matrix <- cor(crime_rate_wide[,-1], use = "complete.obs")
+
+# Find the most similar states with CT in terms of crime rate 
+ct_corr <- sort(cor_matrix["Connecticut",], decreasing = TRUE)
+print(ct_corr)
+```
+# Find states with similar covariates with Connecticut
+
+```{r}
+# Calculate population correlation
+crime_rate_wide_Population <- crimerate_selected %>%
+  filter(year < 2013) %>%
+  pivot_wider(id_cols = year, names_from = state, values_from = Population)
+
+cor_matrix_Population <- cor(crime_rate_wide_Population[,-1], use = "complete.obs")
+ct_corr_Population <- sort(cor_matrix_Population["Connecticut",], decreasing = TRUE)
+print(ct_corr_Population)
+
+# Calculate Unemployment Rate correlation
+crime_rate_wide_Unemployment <- crimerate_selected %>%
+  filter(year < 2013) %>%
+  pivot_wider(id_cols = year, names_from = state, values_from = `Unemployment rate`)
+
+cor_matrix_Unemployment <- cor(crime_rate_wide_Unemployment[,-1], use = "complete.obs")
+ct_corr_Unemployment <- sort(cor_matrix_Unemployment["Connecticut",], decreasing = TRUE)
+print(ct_corr_Unemployment)
+
+#Calculate Median Household Income correlation
+crime_rate_wide_Income <- crimerate_selected %>%
+  filter(year < 2013) %>%
+  pivot_wider(id_cols = year, names_from = state, values_from = `Median Household income`)
+
+cor_matrix_Income <- cor(crime_rate_wide_Income[,-1], use = "complete.obs")
+ct_corr_Income <- sort(cor_matrix_Income["Connecticut",], decreasing = TRUE)
+print(ct_corr_Income)
+
+#Use the weighted correlation to find the states that is the most similar to Connecticut.
+cor_total <-cor_income+cor_unempolyment+cor_popu
+
+combined_similarity <- ((cor_popu/cor_total)*ct_corr_Population + (cor_unempolyment/cor_total)*ct_corr_Unemployment + (cor_income/cor_total)*ct_corr_Income) / 3
+sorted_similarity <- sort(combined_similarity, decreasing = TRUE)
+print(sorted_similarity)
+
+```
+
+#Use the similar states to synthetic Connecticut.
+
+```{r}
+crimerate_selected <- crimerate_selected %>% 
+mutate(State_id = as.numeric(as.factor(state)))
+
+crimerate_selected <- as.data.frame(crimerate_selected)%>%   
+   mutate(State_id = as.numeric(State_id),
+          year = as.numeric(year),
+          Population = as.numeric(Population),
+          `Crime rate` = as.numeric(`Crime rate`),
+          `Unemployment rate` = as.numeric(`Unemployment rate`),
+          `Median Household income` = as.numeric(`Median Household income`))
+
+#  Synthetic Control
+dataprep_out <- dataprep(
+  foo = crimerate_selected,
+  predictors = c("Population", "Median Household income", "Unemployment rate"),
+  dependent = "Crime rate",
+  unit.variable = "State_id",  
+  time.variable = "year",
+  treatment.identifier = 7,
+  controls.identifier = c(13, 16,27,36,5,46,39,6,47),
+  time.predictors.prior = 2008:2012,
+  time.optimize.ssr = 2008:2012,
+  time.plot = seq(2008, 2017, by = 1)
+)
+```
+
+```{r}
+dataprep_out$X1
+dataprep_out$X0
+```
+
+```{r}
+#Synthetic Connecticut
+synth_out <- synth(data.prep.obj = dataprep_out, method = "BFGS")
+```
+#Check the weight to see how to mimic Connecticut
+```{r}
+synth_tables <- synth.tab(dataprep.res = dataprep_out, synth.res = synth_out)
+synth_tables$tab.pred
+```
+```{r}
+synth_tables$tab.v
+```
+```{r}
+synth_tables$tab.w
+```
+
+#Check the our result of whether successfully mimic Connecticut
+
+```{r}
+path.plot(synth.res = synth_out, dataprep.res = dataprep_out, 
+          Ylab = "Crime Rate per 100,000 people", 
+          Xlab = "Year", 
+          Legend = c("Connecticut", "Synthetic Connecticut"),
+          Legend.position = "bottomright")
+gaps.plot(synth.res = synth_out, dataprep.res = dataprep_out, Ylab = "gap in Crime Rate per 100,000 people)", Xlab = "year", Main = NA)
+```
+Based on the graphs, the crime rate almost the same between the Connecticut and Synthetic Connecticut before the law implementation.This means we can use the Synthetic Connecticut to find the potential outcome of Connecticut without the law.
+
+#Then we can calculate the ATE of the law.
+
+```{r}
+#Get the potential yearly outcome of the Synthetic Connecticut.
+dataprep_out$Y1plot
+synth_out$Y0plot
+synth_Y0plot <- dataprep_out$Z0 %*% synth_out$solution.w
+synth_Y0plot
+```
+
+```{r}
+#Get the raw crime rate data for each state
+post_treatment_data <- crimerate_selected %>%
+  filter(year >=2008 & State_id %in% c(13, 16, 27, 36, 5, 46, 39,6,47)) %>%
+  select(year, State_id, `Crime rate`) %>%
+  spread(State_id, `Crime rate`)
+post_treatment_data
+```
+
+```{r}
+#Get the synthetic crime rate for Connecticut based on weighted crime rates in selected states. 
+synth_Y0plot_post <- as.matrix(post_treatment_data[,-1]) %*% synth_out$solution.w
+synth_Y0plot_post
+```
+
+```{r}
+treatment_effect <- dataprep_out$Y1plot - synth_Y0plot_post
+treatment_effect <- as.numeric(treatment_effect)
+treatment_effect
+str(treatment_effect)
+```
+
+#Calculate the treatment effect using the average of the difference between real Connecticut and synthetic Connecticut.
+```{r}
+years <- seq(2008, 2017, by = 1)  
+names(treatment_effect) <- as.character(years)
+before_policy <- mean(treatment_effect[which(as.numeric(names(treatment_effect)) < 2013)], na.rm = TRUE)
+policy_effect <- mean(treatment_effect[which(as.numeric(names(treatment_effect)) >= 2013)], na.rm = TRUE)
+
+before_policy
+policy_effect
+```
+
+#Placebe test and distribution
+
+```{r}
+
+store <- matrix(NA, length(2008:2017), length(c(13, 16, 27, 36, 5, 46, 39,6, 47)))
+colnames(store) <- c(13, 16, 27, 36, 5, 46, 39,6,47)
+
+# Run Placebo Test
+for (iter in c(13, 16, 27, 36, 5, 46, 39,6,47)) {
+
+  # prepare data for synthetic each state
+  dataprep_out <- dataprep(
+    foo = crimerate_selected,
+    predictors = c("Population", "Median Household income", "Unemployment rate"),
+    dependent = "Crime rate",
+    unit.variable = "State_id",
+    time.variable = "year",
+    treatment.identifier = iter,  
+    controls.identifier = setdiff(c(13, 16, 27, 36, 5, 46, 39,6,47), iter),
+    time.predictors.prior = 2008:2012,
+    time.optimize.ssr = 2008:2012,
+    time.plot = 2008:2017
+  )
+
+  # run the synthetic method
+  synth_out <- synth(data.prep.obj = dataprep_out, method = "BFGS")
+
+  # Calculate the potential outcome for each state
+  post_treatment_data_placebo <- crimerate_selected %>%
+    filter(year >= 2008 & State_id %in% setdiff(c(13, 16, 27, 36, 5, 46, 39,6,47), iter)) %>%
+    select(year, State_id, `Crime rate`) %>%
+    spread(State_id, `Crime rate`)
+
+  synth_Y0plot_post <- as.matrix(post_treatment_data_placebo[,-1]) %*% synth_out$solution.w
+
+  #Calculate Treatment Effect（Y1 - Y0）
+  store[, which(colnames(store) == iter)] <- dataprep_out$Y1plot - synth_Y0plot_post
+}
+```
+
+
+```{r}
+# Set the data
+data <- store
+rownames(data) <- 2008:2017  
+nrow(data)
+data <- cbind(treatment_effect, data)
+colnames(data)[1] <- "7"
+data
+
+# 
+gap.start     <- 1
+gap.end       <- nrow(data)
+years         <- 2008:2017  
+gap.end.pre   <- which(rownames(data) == "2012")  #pre-treatment
+
+
+# Calculate MSPE(mean squared prediction error)
+mse             <- apply(data[gap.start:gap.end.pre, ]^2, 2, mean)
+connecticut.mse <- as.numeric(mse["7"])  # Connecticut id is 7
+data
+
+Cex.set <- 0.75  
+
+#Draw Connecticut error 
+plot(years, data[, "7"], 
+     ylim = c(-100, 100), xlab = "Year",
+     xlim = c(2008, 2017), ylab = "Gap in Crime Rate",
+     type = "l", lwd = 2, col = "black",
+     xaxs = "i", yaxs = "i")
+
+# Add Placebo States error 
+for (i in colnames(data)[colnames(data) != "7"]) {  
+  lines(years, data[, i], col = "gray") 
+}
+
+lines(years, data[, "7"], lwd = 2, col = "black")
+
+abline(v = 2013, lty = "dotted", lwd = 2, col = "red")  # Law change
+abline(h = 0, lty = "dashed", lwd = 2, col = "blue")  # 0 line
+
+legend("bottomright", legend = c("Connecticut", "Placebo States"),
+       lty = c(1, 1), col = c("black", "gray"), lwd = c(2, 1), cex = 0.8)
+```
+#Check the statistical significance of ATE
+
+```{r}
+pre_mse <- mean(data[years < 2013, "7"]^2)
+post_mse <- mean(data[years >= 2013, "7"]^2)
+mse_ratio <- post_mse / pre_mse
+print(mse_ratio)
+placebo_mse_ratio <- apply(data[, -1], 2, function(x) mean(x[years >= 2013]^2) / mean(x[years < 2013]^2))
+p_value <- mean(placebo_mse_ratio >= mse_ratio)
+print(p_value)
+```
+```{r}
+hist(placebo_mse_ratio, breaks = 10, main = "Distribution of Placebo MSPE Ratios",
+     xlab = "MSPE Ratio", col = "gray", border = "white")
+abline(v = mse_ratio, col = "red", lwd = 2, lty = 2)  
+```
+
